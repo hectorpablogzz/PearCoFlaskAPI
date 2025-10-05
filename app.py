@@ -1,11 +1,9 @@
 from flask import Flask, jsonify, request
 
 import reports
+import alerts
 
 app = Flask(__name__)
-
-
-
 
 @app.route("/", methods=["GET"])
 def index():
@@ -19,6 +17,11 @@ def get_reports():
 @app.route("/summary", methods=["GET"])
 def get_summary():
     return jsonify(reports.summary_json())
+
+# Alertas
+@app.route("/alerts", methods=["GET"])
+def get_alerts():
+    return jsonify(alerts.alerts_json())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5050)
