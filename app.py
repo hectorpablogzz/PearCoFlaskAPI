@@ -1,10 +1,15 @@
 from flask import Flask, jsonify, request
+from supabase import create_client, Client
 
 import reports
 import alerts
 import caficultores
 
 app = Flask(__name__)
+
+SUPABASE_URL = os.environ.get("https://punmnfgtbcknqxgyajkk.supabase.co")
+SUPABASE_KEY = os.environ.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1bm1uZmd0YmNrbnF4Z3lhamtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2NzkxOTIsImV4cCI6MjA3NTI1NTE5Mn0.Qx7Cbb3-4Ijy-HwgZv-O5Kj0W7RA716lzHSJ4EBcppc")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.route("/", methods=["GET"])
 def index():
@@ -20,10 +25,15 @@ def get_summary():
     return jsonify(reports.summary_json())
 
 # Alertas
-@app.route("/alerts", methods=["GET"])
+@app.route("/alerts2", methods=["GET"])
 def get_alerts():
     return jsonify(alerts.alerts_json())
-
+    
+@app.route("/alerts", methods=["GET"])
+def get_alerts():
+    response = supabase.table("alertas").select("*").execute()
+    return jsonify(response.data)
+    
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
 def get_caficultores():
