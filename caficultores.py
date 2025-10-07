@@ -1,6 +1,7 @@
 from flask import jsonify
+from supabase import create_client, Client
 
-def caficultores_json():
+def caficultores_json(supabase):
     caficultores = [
     {
         "name": "Juan",
@@ -30,4 +31,5 @@ def caficultores_json():
         "address": "Boulevard Hidalgo 987, Guadalajara"
     }
     ]
-    return caficultores
+    response = supabase.table("caficultores").select("*").execute()
+    return response.data

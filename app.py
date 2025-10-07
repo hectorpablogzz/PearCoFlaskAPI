@@ -1,17 +1,20 @@
 from flask import Flask, jsonify, request
 from supabase import create_client, Client
+from dotenv import load_dotenv
+import os
 
 import reports
 import alerts
 import caficultores
 
+load_dotenv()
+
 app = Flask(__name__)
 
 
-NEXT_PUBLIC_SUPABASE_URL="https://punmnfgtbcknqxgyajkk.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1bm1uZmd0YmNrbnF4Z3lhamtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2NzkxOTIsImV4cCI6MjA3NTI1NTE5Mn0.Qx7Cbb3-4Ijy-HwgZv-O5Kj0W7RA716lzHSJ4EBcppc"
-
-supabase: Client = create_client(supabase_url=NEXT_PUBLIC_SUPABASE_URL, supabase_key=NEXT_PUBLIC_SUPABASE_ANON_KEY)
+NEXT_PUBLIC_SUPABASE_URL=os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+NEXT_PUBLIC_SUPABASE_ANON_KEY=os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
 @app.route("/", methods=["GET"])
 def index():
@@ -39,7 +42,14 @@ def get_alerts():
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
 def get_caficultores():
-    return jsonify(caficultores.caficultores_json())
+    response = (
+        supabase.table("caficultores")
+        .select("*")
+        .execute()
+    )
+    print(response)
+    return response.data
+    #return jsonify(caficultores.caficultores_json(supabase))
 
 @app.route("/caficultores", methods=["POST"])
 def add_caficultor():
