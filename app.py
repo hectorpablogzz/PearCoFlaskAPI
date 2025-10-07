@@ -7,9 +7,11 @@ import caficultores
 
 app = Flask(__name__)
 
-SUPABASE_URL = os.environ.get("https://punmnfgtbcknqxgyajkk.supabase.co")
-SUPABASE_KEY = os.environ.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1bm1uZmd0YmNrbnF4Z3lhamtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2NzkxOTIsImV4cCI6MjA3NTI1NTE5Mn0.Qx7Cbb3-4Ijy-HwgZv-O5Kj0W7RA716lzHSJ4EBcppc")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+NEXT_PUBLIC_SUPABASE_URL="https://punmnfgtbcknqxgyajkk.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1bm1uZmd0YmNrbnF4Z3lhamtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2NzkxOTIsImV4cCI6MjA3NTI1NTE5Mn0.Qx7Cbb3-4Ijy-HwgZv-O5Kj0W7RA716lzHSJ4EBcppc"
+
+supabase: Client = create_client(supabase_url=NEXT_PUBLIC_SUPABASE_URL, supabase_key=NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
 @app.route("/", methods=["GET"])
 def index():
@@ -25,9 +27,9 @@ def get_summary():
     return jsonify(reports.summary_json())
 
 # Alertas
-@app.route("/alerts2", methods=["GET"])
-def get_alerts():
-    return jsonify(alerts.alerts_json())
+# @app.route("/alerts2", methods=["GET"])
+# def get_alerts():
+#     return jsonify(alerts.alerts_json())
     
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
