@@ -41,26 +41,19 @@ def get_alerts():
     
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
-def get_caficultores():
-    response = (
-        supabase.table("caficultores")
-        .select("*")
-        .execute()
-    )
-    print(response)
-    return response.data
-    #return jsonify(caficultores.caficultores_json(supabase))
+def caficultores_get():
+    return jsonify(caficultores.caficultores_json())
 
 @app.route("/caficultores", methods=["POST"])
-def add_caficultor():
+def caficultores_post():
     new_caficultor = request.get_json()
-    print("Caficultor agregado")
     print(new_caficultor)
 
-    return jsonify({'message': 'Caficultor agregado exitosamente'}), 200
+    #return jsonify({'message': 'Caficultor agregado exitosamente'}), 200
+    return caficultores.add_caficultor(new_caficultor)
 
 @app.route("/caficultores/<id>", methods=["PUT"])
-def update_caficultor(id):
+def caficultores_put(id):
     data = request.get_json(silent=True) or {}
     print(f"Caficultor actualizado: id={id}")
     print(data)
@@ -68,7 +61,7 @@ def update_caficultor(id):
 
 
 @app.route("/caficultores/<id>", methods=["DELETE"])
-def delete_caficultor(id):
+def caficultores_delete(id):
     print(f"Caficultor eliminado: id={id}")
     return jsonify({'message': 'Caficultor eliminado exitosamente'}), 200
 
