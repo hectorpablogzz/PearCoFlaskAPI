@@ -36,7 +36,8 @@ def get_summary():
     
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
-    response = supabase.table("alertas").select("*").execute()
+    user_id = request.args.get("idusuario")
+    response = supabase.rpc("get_alerts", {"userid": user_id}).execute()
     return jsonify(response.data)
     
 ## Caficultores ##
