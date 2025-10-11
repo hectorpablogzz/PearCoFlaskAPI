@@ -37,8 +37,22 @@ def get_summary():
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
     user_id = request.args.get("idusuario")
+    
     response = supabase.rpc("get_alerts", {"userid": user_id}).execute()
-    return jsonify(response.data)
+
+    # Transformar para que coincida con Swift
+    out = []
+    for item in response.data:
+        out.append({
+            "category": item.get("category") or item.get("categoria"),
+            "title": item.get("title") or item.get("titulo"),
+            "action": item.get("action") or item.get("accion"),
+            "date": item.get("date") or item.get("fecha"),
+            "isCompleted": item.get("isCompleted") or item.get("completado", False)
+        })
+    
+    return jsonify(out)
+
     
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
