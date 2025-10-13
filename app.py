@@ -34,21 +34,34 @@ def get_summary():
 # def get_alerts():
 #     return jsonify(alerts.alerts_json())
     
+from flask import Flask, jsonify, request
+from supabase import create_client, Client
+from datetime import datetime
+import os
+
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
     user_id = request.args.get("idusuario")
-    
     response = supabase.rpc("get_alerts", {"userid": user_id}).execute()
 
-    # Transformar para que coincida con Swift
     out = []
     for item in response.data:
+        # Convertir fecha a ISO 8601
+        fecha = item.get("fecha")
+        if isinstance(fecha, str):
+            fecha_iso = fecha
+        elif isinstance(fecha, datetime):
+            fecha_iso = fecha.isoformat()
+        else:
+            fecha_iso = None
+
         out.append({
-            "category": item.get("category") or item.get("categoria"),
-            "title": item.get("title") or item.get("titulo"),
-            "action": item.get("action") or item.get("accion"),
-            "date": item.get("date") or item.get("fecha"),
-            "isCompleted": item.get("isCompleted") or item.get("completado", False)
+            "category": item.get("categoria"),
+            "title": item.get("titulo"),
+            "action": item.get("accion"),
+            "date": fecha_iso,
+            "type": item.get("tipo"),
+            "isCompleted": bool(item.get("completado", False))
         })
     
     return jsonify(out)
