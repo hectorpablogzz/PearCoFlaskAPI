@@ -46,27 +46,17 @@ def get_alerts():
 
     out = []
     for item in response.data:
-        # Convertir fecha a ISO 8601
-        fecha = item.get("fecha")
-        if isinstance(fecha, str):
-            fecha_iso = fecha
-        elif isinstance(fecha, datetime):
-            fecha_iso = fecha.isoformat()
-        else:
-            fecha_iso = None
-
         out.append({
             "category": item.get("categoria"),
             "title": item.get("titulo"),
             "action": item.get("accion"),
-            "date": fecha_iso,
+            "date": item.get("fecha"),
             "type": item.get("tipo"),
             "isCompleted": bool(item.get("completado", False))
         })
     
     return jsonify(out)
 
-    
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
 def caficultores_get():
