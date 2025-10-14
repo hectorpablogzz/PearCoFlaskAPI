@@ -30,14 +30,6 @@ def get_summary():
     return jsonify(reports.summary_json())
 
 # Alertas
-# @app.route("/alerts2", methods=["GET"])
-# def get_alerts():
-#     return jsonify(alerts.alerts_json())
-    
-from flask import Flask, jsonify, request
-from supabase import create_client, Client
-from datetime import datetime
-import os
 
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
@@ -47,6 +39,7 @@ def get_alerts():
     out = []
     for item in response.data:
         out.append({
+            "idalert": item.get("idalerta"),
             "category": item.get("categoria"),
             "title": item.get("titulo"),
             "action": item.get("accion"),
@@ -56,6 +49,24 @@ def get_alerts():
         })
     
     return jsonify(out)
+
+@app.route("/alerts/complete", methods=["POST"])
+def complete():
+    data = request.get_json()
+    id_alert = data.get("idalerta")
+    is_completed = data.get("isCompleted")
+
+    # Ejecutar RPC o Update directo
+    response = supabase.table("usuarioalerta") \
+        .update({"completado": is_completed}) \
+        .eq("idalerta", id_alert) \
+        .execute()
+
+    if response.data:
+        return jsonify({"success": True, "updated": response.data}), 200
+    else:
+        return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
+
 
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
