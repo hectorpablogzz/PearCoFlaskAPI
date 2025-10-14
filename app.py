@@ -67,6 +67,17 @@ def complete():
     else:
         return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
 
+@app.route("/alerts/<idalerta>", methods=["DELETE"])
+def delete(idalerta):
+    response = supabase.table("usuarioalerta") \
+        .delete() \
+        .eq("idalerta", idalerta) \
+        .execute()
+
+    if response.data:
+        return jsonify({"success": True, "deleted": response.data}), 200
+    else:
+        return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
 
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
