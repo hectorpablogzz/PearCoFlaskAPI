@@ -28,6 +28,51 @@ def get_reports():
 @app.route("/summary", methods=["GET"])
 def get_summary():
     return jsonify(reports.summary_json())
+    
+# Detecciones (camara)
+
+@app.route("/detections", methods=["POST"])
+def detections():
+    """
+    Recibe un JSON con la detección de enfermedad:
+    {
+        "iduser": 23,
+        "iddissease": 5,
+        "date": "2025-10-15"
+    }
+    """
+    data = request.get_json()
+    idusuario = data.get("iduser")
+    idenfermedad = data.get("iddissease")
+    fecha = data.get("date")  # ya en "YYYY-MM-DD"
+
+    # Guardar la detección
+    supabase.table("deteccion").insert({
+        "idusuario": idusuario,
+        "idenfermedad": idenfermedad,
+        "fecha": fecha,
+    }).execute()
+
+    # Buscar alertas configuradas para esta enfermedad
+    alerta_resp = supabase.table("alertas").select("*").eq("idenfermedad", idenfermedad).execute()
+    alertas = alerta_resp.data or []
+
+    for alerta in alertas:
+        # calcular fecha de alerta sumando dias
+        from datetime import datetime, timedelta
+        fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
+        fecha_alerta = fecha_dt + timedelta(days=alerta.get("diasParaAlerta", 0))
+        fecha_alerta_str = fecha_alerta.strftime("%Y-%m-%d")
+
+        # Crear alerta para el usuario
+        supabase.table("usuarioalerta").insert({
+            "idusuario": idusuario,
+            "idalerta": alerta["idalerta"],
+            "fecha": fecha_alerta_str,
+            "completado": False
+        }).execute()
+
+    return jsonify({"success": True, "message": "Detección registrada y alertas generadas"}), 201
 
 # Alertas
 
