@@ -6,6 +6,7 @@ import os
 import reports
 import alerts
 import caficultores
+import risk
 
 load_dotenv()
 
@@ -152,6 +153,14 @@ def caficultores_delete(id):
     #return jsonify({'message': 'Caficultor eliminado exitosamente'}), 200
     return caficultores.delete_caficultor(supabase, id)
 
+# Riesgo mensual
+@app.route("/risk/<region_id>/<int:year>/<int:month>", methods=["GET"])
+def risk_one(region_id, year, month):
+    return jsonify(risk.risk_json(supabase, region_id, year, month))
+
+@app.route("/risk_series/<region_id>/<int:year>", methods=["GET"])
+def risk_series(region_id, year):
+    return jsonify(risk.risk_series_json(supabase, region_id, year))
 
 
     
