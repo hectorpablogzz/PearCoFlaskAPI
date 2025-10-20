@@ -148,8 +148,9 @@ def caficultores_put(id):
 
 @app.route("/caficultores/<id>", methods=["DELETE"])
 def caficultores_delete(id):
-    print(f"Caficultor eliminado: id={id}")
-    return jsonify({'message': 'Caficultor eliminado exitosamente'}), 200
+    #print(f"Caficultor eliminado: id={id}")
+    #return jsonify({'message': 'Caficultor eliminado exitosamente'}), 200
+    return caficultores.delete_caficultor(supabase, id)
 
 
 

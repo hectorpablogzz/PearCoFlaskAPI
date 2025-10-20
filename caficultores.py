@@ -72,3 +72,19 @@ def edit_caficultor(supabase, caficultor_id, data):
 
     except Exception as e:
         return {"success": False, "message": str(e)}, 500
+
+def delete_caficultor(supabase, id):
+    try:
+        response = supabase.table('caficultores').delete().eq('id', id).execute()
+
+        if response.data:
+            return {"success": True, "message": "Caficultor eliminado exitosamente"}, 200
+        
+        if response.error:
+            return {"success": False, "message": response.error.message}, 400
+        
+        # If data is empty and there is no error, it means no row was found to delete.
+        return {"success": False, "message": f"No se encontró un caficultor con el id {id}"}, 404
+
+    except Exception as e:
+        return {"success": False, "message": str(e)}, 500
