@@ -127,22 +127,23 @@ def delete(idalerta):
 ## Caficultores ##
 @app.route("/caficultores", methods=["GET"])
 def caficultores_get():
-    return jsonify(caficultores.caficultores_json())
+    return jsonify(caficultores.caficultores_json(supabase))
 
 @app.route("/caficultores", methods=["POST"])
 def caficultores_post():
     new_caficultor = request.get_json()
-    print(new_caficultor)
-
-    #return jsonify({'message': 'Caficultor agregado exitosamente'}), 200
-    return caficultores.add_caficultor(new_caficultor)
+    if not new_caficultor:
+        return jsonify({"message": "No JSON data received"}), 400
+    
+    return caficultores.add_caficultor(supabase, new_caficultor)
 
 @app.route("/caficultores/<id>", methods=["PUT"])
 def caficultores_put(id):
-    data = request.get_json(silent=True) or {}
-    print(f"Caficultor actualizado: id={id}")
-    print(data)
-    return jsonify({'message': 'Caficultor actualizado exitosamente'}), 200
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "No JSON data received"}), 400
+        
+    return caficultores.edit_caficultor(supabase, id, data)
 
 
 @app.route("/caficultores/<id>", methods=["DELETE"])
