@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from uuid import uuid4
+from flask_cors import CORS
 import os
 
 import reports
@@ -15,6 +16,7 @@ import parcelas
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 NEXT_PUBLIC_SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
