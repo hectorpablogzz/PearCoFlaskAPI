@@ -207,54 +207,67 @@ def upload_image():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# Crear diágnostico
 @app.route("/diagnoses", methods=["POST"])
 def create_diagnosis():
-    user_id = request.form.get("user_id") or (request.json or {}).get("user_id")
-    diagnosis = request.form.get("diagnosis") or (request.json or {}).get("diagnosis")
-    image_url = request.form.get("image_url") or (request.json or {}).get("image_url")
+    """Crea un registro en diagnostico_foto. 
+       Puede recibir JSON o multipart/form-data."""
+    id_usuario = request.form.get("idUsuario") or (request.json or {}).get("idUsuario")
+    diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico")  # Nombre del diagnóstico
+    imagen_url = request.form.get("imagen_url") or (request.json or {}).get("imagen_url")
 
-    if not user_id or not diagnosis:
-        return jsonify({"error": "user_id and diagnosis are required"}), 400
+    if not id_usuario or not diagnostico:
+        return jsonify({"error": "idUsuario and diagnostico are required"}), 400
 
+    # Si viene un archivo, se sube y se usa su URL
     if 'file' in request.files and request.files['file'].filename:
         f = request.files['file']
         ext = (f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg')
-        dest_path = f"{user_id}/{uuid4()}.{ext}"
+        dest_path = f"{id_usuario}/{uuid4()}.{ext}"
         content_type = f.mimetype or "image/jpeg"
         try:
-            image_url = _upload_bytes_to_storage(f.read(), dest_path, content_type)
+            imagen_url = _upload_bytes_to_storage(f.read(), dest_path, content_type)
         except Exception as e:
             return jsonify({"error": f"upload failed: {e}"}), 500
 
-    if not image_url:
-        return jsonify({"error": "image_url is required when file is not provided"}), 400
+    if not imagen_url:
+        return jsonify({"error": "imagen_url is required when file is not provided"}), 400
 
     try:
-        insert_resp = supabase.table("coffee_diagnoses").insert({
-            "image_url": image_url,
-            "diagnosis": diagnosis,
-            "IdUsuario": user_id
+        insert_resp = supabase.table("diagnostico_foto").insert({
+            "imagen_url": imagen_url,
+            "idUsuario": id_usuario,
+            "diagnostico": diagnostico  # Guardamos el nombre del diagnóstico
         }).execute()
         data = getattr(insert_resp, "data", None) or insert_resp
         return jsonify({"message": "created", "rows": data}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+# Obtener diágnostico de un usuario
 @app.route("/diagnoses", methods=["GET"])
 def list_diagnoses():
-    user_id = request.args.get("user_id")
+    """Lista diagnósticos filtrados por idUsuario (usuario) con detalles del diagnóstico."""
+    id_usuario = request.args.get("idUsuario")
     limit = int(request.args.get("limit", "50"))
     offset = int(request.args.get("offset", "0"))
     try:
-        q = supabase.table("coffee_diagnoses").select("*").order("created_at", desc=True)
-        if user_id:
-            q = q.eq("IdUsuario", user_id)
+        # Hacer un JOIN entre diagnostico_foto y diagnostico para obtener detalles completos
+        q = supabase.table("diagnostico_foto") \
+            .select("*, diagnostico(descripcion, causas, prevencion, tratamiento)") \
+            .order("fecha", desc=True)
+        if id_usuario:
+            q = q.eq("idUsuario", id_usuario)
         q = q.range(offset, offset + limit - 1)
         resp = q.execute()
         data = getattr(resp, "data", None) or resp
         return jsonify(data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 if __name__ == "__main__":
