@@ -8,22 +8,33 @@ import reports
 import alerts
 import caficultores
 import risk
+import auth
+import parcelas  
 
 load_dotenv()
 
 app = Flask(__name__)
 
-
-NEXT_PUBLIC_SUPABASE_URL=os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-NEXT_PUBLIC_SUPABASE_ANON_KEY=os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+NEXT_PUBLIC_SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
+
 
 
 @app.route("/", methods=["GET"])
 def index():
     who = request.args.get("who", "world")
     return jsonify({"message": f"it works, {who}!"})
+
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    return auth.login_user(supabase, data)
+
+
 
 @app.route("/reports", methods=["GET"])
 def get_reports():
@@ -32,43 +43,30 @@ def get_reports():
 @app.route("/summary", methods=["GET"])
 def get_summary():
     return jsonify(reports.summary_json())
-    
-# Detecciones (camara)
+
+
 
 @app.route("/detections", methods=["POST"])
 def detections():
-    """
-    Recibe un JSON con la detección de enfermedad:
-    {
-        "iduser": 23,
-        "iddissease": 5,
-        "date": "2025-10-15"
-    }
-    """
     data = request.get_json()
     idusuario = data.get("iduser")
     idenfermedad = data.get("iddissease")
-    fecha = data.get("date")  # ya en "YYYY-MM-DD"
-
-    # Guardar la detección
+    fecha = data.get("date")
+    
     supabase.table("deteccion").insert({
         "idusuario": idusuario,
         "idenfermedad": idenfermedad,
         "fecha": fecha,
     }).execute()
 
-    # Buscar alertas configuradas para esta enfermedad
     alerta_resp = supabase.table("alertas").select("*").eq("idenfermedad", idenfermedad).execute()
     alertas = alerta_resp.data or []
 
+    from datetime import datetime, timedelta
     for alerta in alertas:
-        # calcular fecha de alerta sumando dias
-        from datetime import datetime, timedelta
         fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
         fecha_alerta = fecha_dt + timedelta(days=alerta.get("diasParaAlerta", 0))
         fecha_alerta_str = fecha_alerta.strftime("%Y-%m-%d")
-
-        # Crear alerta para el usuario
         supabase.table("usuarioalerta").insert({
             "idusuario": idusuario,
             "idalerta": alerta["idalerta"],
@@ -78,13 +76,12 @@ def detections():
 
     return jsonify({"success": True, "message": "Detección registrada y alertas generadas"}), 201
 
-# Alertas
 
+# Alerts
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
     user_id = request.args.get("idusuario")
     response = supabase.rpc("get_alerts", {"userid": user_id}).execute()
-
     out = []
     for item in response.data:
         out.append({
@@ -96,39 +93,31 @@ def get_alerts():
             "type": item.get("tipo"),
             "isCompleted": bool(item.get("completado", False))
         })
-    
     return jsonify(out)
 
+
 @app.route("/alerts/complete", methods=["POST"])
-def complete():
+def complete_alert():
     data = request.get_json()
     id_alert = data.get("idalerta")
     is_completed = data.get("isCompleted")
-
-    # Ejecutar RPC o Update directo
-    response = supabase.table("usuarioalerta") \
-        .update({"completado": is_completed}) \
-        .eq("idalerta", id_alert) \
-        .execute()
-
+    response = supabase.table("usuarioalerta").update({"completado": is_completed}).eq("idalerta", id_alert).execute()
     if response.data:
         return jsonify({"success": True, "updated": response.data}), 200
     else:
         return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
 
-@app.route("/alerts/<idalerta>", methods=["DELETE"])
-def delete(idalerta):
-    response = supabase.table("usuarioalerta") \
-        .delete() \
-        .eq("idalerta", idalerta) \
-        .execute()
 
+@app.route("/alerts/<idalerta>", methods=["DELETE"])
+def delete_alert(idalerta):
+    response = supabase.table("usuarioalerta").delete().eq("idalerta", idalerta).execute()
     if response.data:
         return jsonify({"success": True, "deleted": response.data}), 200
     else:
         return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
 
-## Caficultores ##
+
+# Caficultores
 @app.route("/caficultores", methods=["GET"])
 def caficultores_get():
     return jsonify(caficultores.caficultores_json(supabase))
@@ -138,7 +127,6 @@ def caficultores_post():
     new_caficultor = request.get_json()
     if not new_caficultor:
         return jsonify({"message": "No JSON data received"}), 400
-    
     return caficultores.add_caficultor(supabase, new_caficultor)
 
 @app.route("/caficultores/<id>", methods=["PUT"])
@@ -146,15 +134,36 @@ def caficultores_put(id):
     data = request.get_json()
     if not data:
         return jsonify({"message": "No JSON data received"}), 400
-        
     return caficultores.edit_caficultor(supabase, id, data)
-
 
 @app.route("/caficultores/<id>", methods=["DELETE"])
 def caficultores_delete(id):
-    #print(f"Caficultor eliminado: id={id}")
-    #return jsonify({'message': 'Caficultor eliminado exitosamente'}), 200
     return caficultores.delete_caficultor(supabase, id)
+
+
+# Parcelas CRUD
+@app.route("/parcelas", methods=["GET"])
+def get_parcelas():
+    return parcelas.obtener_parcelas(supabase)
+
+@app.route("/parcelas/<int:idParcela>", methods=["GET"])
+def get_parcela(idParcela):
+    return parcelas.obtener_parcela(supabase, idParcela)
+
+@app.route("/parcelas", methods=["POST"])
+def post_parcela():
+    data = request.get_json()
+    return parcelas.crear_parcela(supabase, data)
+
+@app.route("/parcelas/<int:idParcela>", methods=["PUT"])
+def put_parcela(idParcela):
+    data = request.get_json()
+    return parcelas.modificar_parcela(supabase, idParcela, data)
+
+@app.route("/parcelas/<int:idParcela>", methods=["DELETE"])
+def delete_parcela(idParcela):
+    return parcelas.eliminar_parcela(supabase, idParcela)
+
 
 # Riesgo mensual
 @app.route("/risk/<region_id>/<int:year>/<int:month>", methods=["GET"])
@@ -166,28 +175,20 @@ def risk_series(region_id, year):
     return jsonify(risk.risk_series_json(supabase, region_id, year))
 
 
-
-# Subir las fotos al storage y obtener los URL
+# Subir imágenes y diagnósticos
 def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: str):
-    """Sube bytes al bucket de Supabase y devuelve la URL pública"""
     storage_resp = supabase.storage.from_(BUCKET_NAME).upload(
         file=file_bytes,
         path=dest_path,
-        file_options={
-            "contentType": content_type,
-            "cacheControl": "3600",
-            "upsert": False,
-        },
+        file_options={"contentType": content_type, "cacheControl": "3600", "upsert": False},
     )
     public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(dest_path)
     if isinstance(public_url, dict) and 'publicUrl' in public_url:
         return public_url['publicUrl']
     return public_url
 
-
 @app.route("/upload_image", methods=["POST"])
 def upload_image():
-    """Recibe una imagen (multipart/form-data) y la sube al Storage"""
     if 'file' not in request.files:
         return jsonify({"error": "file is required"}), 400
     f = request.files['file']
@@ -204,15 +205,10 @@ def upload_image():
         url = _upload_bytes_to_storage(file_bytes, dest_path, content_type)
         return jsonify({"image_url": url, "path": dest_path}), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500  
+        return jsonify({"error": str(e)}), 500
 
-
-
-# Crear diágnostico 
- @app.route("/diagnoses", methods=["POST"])
+@app.route("/diagnoses", methods=["POST"])
 def create_diagnosis():
-    """Crea un registro en coffee_diagnoses. 
-       Puede recibir JSON o multipart/form-data."""
     user_id = request.form.get("user_id") or (request.json or {}).get("user_id")
     diagnosis = request.form.get("diagnosis") or (request.json or {}).get("diagnosis")
     image_url = request.form.get("image_url") or (request.json or {}).get("image_url")
@@ -220,7 +216,6 @@ def create_diagnosis():
     if not user_id or not diagnosis:
         return jsonify({"error": "user_id and diagnosis are required"}), 400
 
-    # Si viene un archivo, se sube y se usa su URL
     if 'file' in request.files and request.files['file'].filename:
         f = request.files['file']
         ext = (f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg')
@@ -245,12 +240,8 @@ def create_diagnosis():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-# Obtener diágnostico de un usuario
 @app.route("/diagnoses", methods=["GET"])
 def list_diagnoses():
-    """Lista diagnósticos filtrados por usuario """
     user_id = request.args.get("user_id")
     limit = int(request.args.get("limit", "50"))
     offset = int(request.args.get("offset", "0"))
@@ -264,7 +255,6 @@ def list_diagnoses():
         return jsonify(data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 if __name__ == "__main__":

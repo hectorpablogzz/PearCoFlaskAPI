@@ -1,89 +1,86 @@
-from flask import Flask, request, jsonify
+from flask import jsonify
+from supabase import Client
 
-app = Flask(__name__)
+def crear_parcela(supabase: Client, data: dict):
+    # Validación básica
+    ubic = data.get("ubicacion") or {}
+    missing_parcela = [f for f in ("nombre", "hectareas", "tipo") if f not in data]
+    missing_ubic = [f for f in ("estado", "municipio", "latitud", "longitud") if f not in ubic]
+    if missing_parcela or missing_ubic:
+        return jsonify({
+            "success": False,
+            "error": "Datos incompletos",
+            "missing": {
+                "parcela": missing_parcela,
+                "ubicacion": missing_ubic
+            }
+        }), 400
 
-parcelas = []
-ubicaciones = []
-parcela_id_counter = 1
-ubicacion_id_counter = 1
-
-
-@app.route('/parcelas', methods=['POST'])
-def crear_parcela():
-    global parcela_id_counter, ubicacion_id_counter
-
-    data = request.get_json()
-
-    ubicacion = {
-        "idUbicacion": ubicacion_id_counter,
-        "estado": data["ubicacion"]["estado"],
-        "municipio": data["ubicacion"]["municipio"],
-        "latitud": data["ubicacion"]["latitud"],
-        "longitud": data["ubicacion"]["longitud"]
+    # Insertar ubicación
+    ubicacion_payload = {
+        "estado": ubic.get("estado"),
+        "municipio": ubic.get("municipio"),
+        "latitud": ubic.get("latitud"),
+        "longitud": ubic.get("longitud")
     }
-    ubicaciones.append(ubicacion)
-    ubicacion_id_counter += 1
+    ubic_resp = supabase.table("ubicacion").insert(ubicacion_payload).execute()
+    if not ubic_resp.data:
+        return jsonify({"success": False, "error": "No se pudo crear la ubicación"}), 500
+    ubicacion_creada = ubic_resp.data[0]
 
-    parcela = {
-        "idParcela": parcela_id_counter,
-        "nombre": data["nombre"],
-        "hectareas": data["hectareas"],
-        "tipo": data["tipo"],
-        "ubicacion": ubicacion
+    # Insertar parcela
+    parcela_payload = {
+        "nombre": data.get("nombre"),
+        "hectareas": data.get("hectareas"),
+        "tipo": data.get("tipo"),
+        "idUbicacion": ubicacion_creada["idUbicacion"]
     }
-    parcelas.append(parcela)
-    parcela_id_counter += 1
+    parcela_resp = supabase.table("parcela").insert(parcela_payload).execute()
+    if not parcela_resp.data:
+        return jsonify({"success": False, "error": "No se pudo crear la parcela"}), 500
 
-    return jsonify(parcela), 201
+    parcela_creada = parcela_resp.data[0]
+    parcela_creada["ubicacion"] = ubicacion_creada
+
+    return jsonify({"success": True, "data": parcela_creada}), 201
 
 
-@app.route('/parcelas/<int:idParcela>', methods=['PUT'])
-def modificar_parcela(idParcela):
-    data = request.get_json()
+def obtener_parcelas(supabase: Client):
+    response = supabase.table("parcela").select("*, ubicacion(*)").execute()
+    return jsonify({"success": True, "data": response.data}), 200
 
-    parcela = next((p for p in parcelas if p["idParcela"] == idParcela), None)
-    if not parcela:
-        return jsonify({"error": "Parcela no encontrada"}), 404
 
-    parcela["nombre"] = data.get("nombre", parcela["nombre"])
-    parcela["hectareas"] = data.get("hectareas", parcela["hectareas"])
-    parcela["tipo"] = data.get("tipo", parcela["tipo"])
+def obtener_parcela(supabase: Client, idParcela: int):
+    response = supabase.table("parcela").select("*, ubicacion(*)").eq("idParcela", idParcela).execute()
+    if not response.data:
+        return jsonify({"success": False, "error": "Parcela no encontrada"}), 404
+    return jsonify({"success": True, "data": response.data[0]}), 200
 
+
+def modificar_parcela(supabase: Client, idParcela: int, data: dict):
+    # Actualizar ubicación si viene
     if "ubicacion" in data:
-        ubicacion = parcela["ubicacion"]
-        ubicacion["estado"] = data["ubicacion"].get("estado", ubicacion["estado"])
-        ubicacion["municipio"] = data["ubicacion"].get("municipio", ubicacion["municipio"])
-        ubicacion["latitud"] = data["ubicacion"].get("latitud", ubicacion["latitud"])
-        ubicacion["longitud"] = data["ubicacion"].get("longitud", ubicacion["longitud"])
+        parcela_resp = supabase.table("parcela").select("*").eq("idParcela", idParcela).execute()
+        if not parcela_resp.data:
+            return jsonify({"success": False, "error": "Parcela no encontrada"}), 404
+        idUbicacion = parcela_resp.data[0]["idUbicacion"]
+        supabase.table("ubicacion").update(data["ubicacion"]).eq("idUbicacion", idUbicacion).execute()
 
-    return jsonify(parcela), 200
+    # Actualizar parcela
+    parcela_payload = {k: data[k] for k in ("nombre", "hectareas", "tipo") if k in data}
+    if parcela_payload:
+        supabase.table("parcela").update(parcela_payload).eq("idParcela", idParcela).execute()
 
-
-@app.route('/parcelas', methods=['GET'])
-def obtener_parcelas():
-    return jsonify(parcelas), 200
-
-
-@app.route('/parcelas/<int:idParcela>', methods=['GET'])
-def obtener_parcela(idParcela):
-    parcela = next((p for p in parcelas if p["idParcela"] == idParcela), None)
-    if not parcela:
-        return jsonify({"error": "Parcela no encontrada"}), 404
-    return jsonify(parcela), 200
+    return obtener_parcela(supabase, idParcela)
 
 
-@app.route('/parcelas/<int:idParcela>', methods=['DELETE'])
-def eliminar_parcela(idParcela):
-    global parcelas
+def eliminar_parcela(supabase: Client, idParcela: int):
+    parcela_resp = supabase.table("parcela").select("*").eq("idParcela", idParcela).execute()
+    if not parcela_resp.data:
+        return jsonify({"success": False, "error": "Parcela no encontrada"}), 404
 
-    parcela = next((p for p in parcelas if p["idParcela"] == idParcela), None)
-    if not parcela:
-        return jsonify({"error": "Parcela no encontrada"}), 404
+    idUbicacion = parcela_resp.data[0]["idUbicacion"]
+    supabase.table("parcela").delete().eq("idParcela", idParcela).execute()
+    supabase.table("ubicacion").delete().eq("idUbicacion", idUbicacion).execute()
 
-    parcelas = [p for p in parcelas if p["idParcela"] != idParcela]
-
-    return jsonify({"mensaje": f"Parcela con id {idParcela} eliminada correctamente"}), 200
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    return jsonify({"success": True, "data": f"Parcela con id {idParcela} eliminada correctamente"}), 200
