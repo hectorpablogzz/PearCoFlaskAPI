@@ -2,6 +2,6 @@
 Flask==2.2.5
 Werkzeug==2.2.3
 flask-cors==2.1.0
-gunicorn==20.1.0
+gunicorn==22.0.0
 supabase
-python-dotenv==1.0.1
+python-dotenv
