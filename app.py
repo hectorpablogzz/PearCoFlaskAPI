@@ -273,7 +273,7 @@ def list_diagnoses():
 
 # Alternativa crear diágnostico
 @app.route("/diagnostic", methods=["POST"])
-def create_diagnosis():
+def create_diagnostic():
     """Crea un registro en diagnostico_foto. 
        y en base a ello genera las alertas.
        Puede recibir JSON o multipart/form-data."""
