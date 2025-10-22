@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from uuid import uuid4
-from flask_cors import CORS
 import os
 
 import reports
@@ -12,7 +11,6 @@ import risk
 import auth
 import parcelas  
 
-CORS(app)
 
 load_dotenv()
 
