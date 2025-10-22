@@ -251,7 +251,7 @@ def create_diagnosis():
 
 
 # Obtener diágnostico de un usuario
-@app.route("/diagnoses", methods=["GET"])
+@app.route("/diagnoses/list", methods=["GET"])
 def list_diagnoses():
     """Lista diagnósticos filtrados por idUsuario (usuario) con detalles del diagnóstico."""
     id_usuario = request.args.get("idUsuario")
