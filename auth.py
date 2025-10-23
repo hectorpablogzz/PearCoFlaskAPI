@@ -12,27 +12,23 @@ def login_user(supabase: Client, login_data: dict):
         if not email or not password:
             return {"success": False, "message": "Correo y contraseña son requeridos"}, 400
 
-        # 1. Buscar al usuario por su correo
-        # Asumimos que la tabla se llama 'usuarios' según tu AuthViewModel
+        # Buscar al usuario por su correo (campo 'correo' en tu tabla)
         response = supabase.table("usuarios").select("*").eq("correo", email.lower()).execute()
 
         if not response.data:
-            # 2. Usuario no encontrado
             return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
         
-        # 3. Usuario encontrado, verificar contraseña
         user = response.data[0]
-        
-        if user['contraseña'] == password:
-            # 4. Contraseña correcta
-            
-            # No envíes la contraseña de vuelta al cliente
-            user.pop('contraseña', None) 
-            
-            # Enviamos 'data' para que coincida con el AuthViewModel
-            return {"success": True, "message": "Inicio de sesión exitoso", "data": user}, 200
+
+        # Comparar con el campo correcto 'contrasena'
+        if user["contrasena"] == password:
+            user.pop("contrasena", None)  # No enviamos la contraseña de vuelta
+            return {
+                "success": True,
+                "message": "Inicio de sesión exitoso",
+                "data": user
+            }, 200
         else:
-            # 5. Contraseña incorrecta
             return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
 
     except Exception as e:
