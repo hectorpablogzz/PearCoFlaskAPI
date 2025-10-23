@@ -19,10 +19,10 @@ supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
 # Login
-@app.route("/login", methods=["POST"])
-def login():
-    response, status_code = login_user(supabase, request.json)
-    return jsonify(response), status_code
+# @app.route("/login", methods=["POST"])
+# def login():
+#     response, status_code = login_user(supabase, request.json)
+#     return jsonify(response), status_code
 
 # Reports
 @app.route("/reports", methods=["GET"])
