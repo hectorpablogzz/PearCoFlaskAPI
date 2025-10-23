@@ -29,14 +29,10 @@ def index():
     who = request.args.get("who", "world")
     return jsonify({"message": f"it works, {who}!"})
 
-
-
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    return auth.login_user(supabase, data)
-
-
+    response, status_code = login_user(supabase, request.json)
+    return jsonify(response), status_code
 
 @app.route("/reports", methods=["GET"])
 def get_reports():
