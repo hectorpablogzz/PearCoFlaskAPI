@@ -10,30 +10,21 @@ import caficultores
 import risk
 import auth
 import parcelas  
-
-
 load_dotenv()
-
 app = Flask(__name__)
-
 
 NEXT_PUBLIC_SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
-
-
-@app.route("/", methods=["GET"])
-def index():
-    who = request.args.get("who", "world")
-    return jsonify({"message": f"it works, {who}!"})
-
+# Login
 @app.route("/login", methods=["POST"])
 def login():
     response, status_code = login_user(supabase, request.json)
     return jsonify(response), status_code
 
+# Reports
 @app.route("/reports", methods=["GET"])
 def get_reports():
     return jsonify(reports.reports_json())
@@ -41,39 +32,6 @@ def get_reports():
 @app.route("/summary", methods=["GET"])
 def get_summary():
     return jsonify(reports.summary_json())
-
-
-
-@app.route("/detections", methods=["POST"])
-def detections():
-    data = request.get_json()
-    idusuario = data.get("iduser")
-    idenfermedad = data.get("iddissease")
-    fecha = data.get("date")
-    
-    supabase.table("deteccion").insert({
-        "idusuario": idusuario,
-        "idenfermedad": idenfermedad,
-        "fecha": fecha,
-    }).execute()
-
-    alerta_resp = supabase.table("alertas").select("*").eq("idenfermedad", idenfermedad).execute()
-    alertas = alerta_resp.data or []
-
-    from datetime import datetime, timedelta
-    for alerta in alertas:
-        fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
-        fecha_alerta = fecha_dt + timedelta(days=alerta.get("diasParaAlerta", 0))
-        fecha_alerta_str = fecha_alerta.strftime("%Y-%m-%d")
-        supabase.table("usuarioalerta").insert({
-            "idusuario": idusuario,
-            "idalerta": alerta["idalerta"],
-            "fecha": fecha_alerta_str,
-            "completado": False
-        }).execute()
-
-    return jsonify({"success": True, "message": "Detección registrada y alertas generadas"}), 201
-
 
 # Alerts
 @app.route("/alerts", methods=["GET"])
@@ -93,7 +51,6 @@ def get_alerts():
         })
     return jsonify(out)
 
-
 @app.route("/alerts/complete", methods=["POST"])
 def complete_alert():
     data = request.get_json()
@@ -105,7 +62,6 @@ def complete_alert():
     else:
         return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
 
-
 @app.route("/alerts/<idalerta>", methods=["DELETE"])
 def delete_alert(idalerta):
     response = supabase.table("usuarioalerta").delete().eq("idalerta", idalerta).execute()
@@ -113,7 +69,6 @@ def delete_alert(idalerta):
         return jsonify({"success": True, "deleted": response.data}), 200
     else:
         return jsonify({"success": False, "message": "No se encontró la alerta"}), 404
-
 
 # Caficultores
 @app.route("/caficultores", methods=["GET"])
