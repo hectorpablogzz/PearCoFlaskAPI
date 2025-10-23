@@ -23,12 +23,6 @@ def login_user(supabase: Client, login_data: dict):
         # 3. Usuario encontrado, verificar contraseña
         user = response.data[0]
         
-        # --- ¡¡¡ADVERTENCIA DE SEGURIDAD MUY IMPORTANTE!!! ---
-        # Estás comparando contraseñas en TEXTO PLANO. 
-        # NUNCA hagas esto en una aplicación real.
-        # Tu base de datos debería guardar un "hash" de la contraseña (usando bcrypt).
-        # Por ahora, para que funcione con tu base de datos actual:
-        
         if user['contraseña'] == password:
             # 4. Contraseña correcta
             
