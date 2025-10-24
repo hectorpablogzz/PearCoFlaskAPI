@@ -45,6 +45,9 @@ def login_user(supabase: Client, login_data: dict):
             # Convierte el objeto UUID a un string antes de enviarlo.
             if 'idusuario' in user and user['idusuario'] is not None:
                 user['idusuario'] = str(user['idusuario'])
+
+            if 'idparcela' in user and user['idparcela'] is not None:
+                user['idparcela'] = str(user['idparcela'])
             # ---------------------------
 
             user.pop("contrasena", None)  # No enviamos la contraseña de vuelta
