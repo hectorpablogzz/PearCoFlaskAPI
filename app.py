@@ -3,13 +3,15 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from uuid import uuid4
 import os
+from datetime import datetime, timedelta
 
 import reports
 import alerts
 import caficultores
 import risk
 import auth
-import parcelas  
+import parcelas
+
 load_dotenv()
 app = Flask(__name__)
 
@@ -18,54 +20,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
-from supabase import Client
+# Login
+@app.route("/login", methods=["POST"])
+def login():
+    response, status_code = auth.login_user(supabase, request.json)
+    return jsonify(response), status_code
 
-@app.route("/login", methods=["GET"])
-def login_user(supabase: Client, login_data: dict):
-    """
-    Verifica credenciales con texto plano.
-    """
-    try:
-        # Limpiamos los datos de entrada para evitar errores por espacios o mayúsculas
-        email = login_data.get('correo').strip().lower()
-        password = login_data.get('contrasena').strip()
-
-        if not email or not password:
-            return {"success": False, "message": "Correo y contraseña son requeridos"}, 400
-
-        # Buscar al usuario por su correo
-        response = supabase.table("usuarios").select("*").eq("correo", email).execute()
-
-        if not response.data:
-            return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
-        
-        user = response.data[0]
-        password_from_db = user["contrasena"]
-
-        # --- COMPARACIÓN DIRECTA DE TEXTO PLANO ---
-        if password_from_db == password:
-            # La contraseña es correcta
-            user.pop("contrasena", None)
-
-            # Aseguramos que los UUID se envíen como string
-            if 'idusuario' in user and user['idusuario'] is not None:
-                user['idusuario'] = str(user['idusuario'])
-            if 'idparcela' in user and user['idparcela'] is not None:
-                user['idparcela'] = str(user['idparcela'])
-
-            return {
-                "success": True,
-                "message": "Inicio de sesión exitoso",
-                "data": user
-            }, 200
-        else:
-            # La contraseña es incorrecta
-            return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
-
-    except Exception as e:
-        print(f"Error del servidor: {str(e)}") # Útil para depurar en tu consola
-        return {"success": False, "message": f"Error del servidor: {str(e)}"}, 500
-        
 # Reports
 @app.route("/reports", methods=["GET"])
 def get_reports():
@@ -135,13 +95,12 @@ def caficultores_put(id):
 def caficultores_delete(id):
     return caficultores.delete_caficultor(supabase, id)
 
-
 # Parcelas CRUD
 @app.route("/parcelas", methods=["GET"])
 def get_parcelas():
     return parcelas.obtener_parcelas(supabase)
 
-@app.route("/parcelas/<int:idParcela>", methods=["GET"])
+@app.route("/parcelas/<idParcela>", methods=["GET"])
 def get_parcela(idParcela):
     return parcelas.obtener_parcela(supabase, idParcela)
 
@@ -150,15 +109,14 @@ def post_parcela():
     data = request.get_json()
     return parcelas.crear_parcela(supabase, data)
 
-@app.route("/parcelas/<int:idParcela>", methods=["PUT"])
+@app.route("/parcelas/<idParcela>", methods=["PUT"])
 def put_parcela(idParcela):
     data = request.get_json()
     return parcelas.modificar_parcela(supabase, idParcela, data)
 
-@app.route("/parcelas/<int:idParcela>", methods=["DELETE"])
+@app.route("/parcelas/<idParcela>", methods=["DELETE"])
 def delete_parcela(idParcela):
     return parcelas.eliminar_parcela(supabase, idParcela)
-
 
 # Riesgo mensual
 @app.route("/risk/<region_id>/<int:year>/<int:month>", methods=["GET"])
@@ -169,7 +127,6 @@ def risk_one(region_id, year, month):
 def risk_series(region_id, year):
     return jsonify(risk.risk_series_json(supabase, region_id, year))
 
-
 # Subir imágenes y diagnósticos
 def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: str):
     storage_resp = supabase.storage.from_(BUCKET_NAME).upload(
@@ -177,10 +134,10 @@ def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: st
         path=dest_path,
         file_options={"contentType": content_type, "cacheControl": "3600", "upsert": False},
     )
-    public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(dest_path)
-    if isinstance(public_url, dict) and 'publicUrl' in public_url:
-        return public_url['publicUrl']
-    return public_url
+    public_url_data = supabase.storage.from_(BUCKET_NAME).get_public_url(dest_path)
+    if isinstance(public_url_data, dict):
+        return public_url_data.get('publicUrl', str(public_url_data))
+    return public_url_data
 
 @app.route("/upload_image", methods=["POST"])
 def upload_image():
@@ -202,20 +159,16 @@ def upload_image():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Crear diágnostico
+# Crear diagnóstico
 @app.route("/diagnoses", methods=["POST"])
 def create_diagnosis():
-    """Crea un registro en diagnostico_foto. 
-       Puede recibir JSON o multipart/form-data."""
     id_usuario = request.form.get("idUsuario") or (request.json or {}).get("idUsuario")
-    diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico")  # Nombre del diagnóstico
+    diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico")
     imagen_url = request.form.get("imagen_url") or (request.json or {}).get("imagen_url")
 
     if not id_usuario or not diagnostico:
         return jsonify({"error": "idUsuario and diagnostico are required"}), 400
 
-    # Si viene un archivo, se sube y se usa su URL
     if 'file' in request.files and request.files['file'].filename:
         f = request.files['file']
         ext = (f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg')
@@ -233,24 +186,20 @@ def create_diagnosis():
         insert_resp = supabase.table("diagnostico_foto").insert({
             "imagen_url": imagen_url,
             "idUsuario": id_usuario,
-            "diagnostico": diagnostico  # Guardamos el nombre del diagnóstico
+            "diagnostico": diagnostico
         }).execute()
         data = getattr(insert_resp, "data", None) or insert_resp
         return jsonify({"message": "created", "rows": data}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-# Obtener diágnostico de un usuario
+# Obtener diagnóstico de un usuario
 @app.route("/diagnoses/list", methods=["GET"])
 def list_diagnoses():
-    """Lista diagnósticos filtrados por idUsuario (usuario) con detalles del diagnóstico."""
     id_usuario = request.args.get("idUsuario")
     limit = int(request.args.get("limit", "50"))
     offset = int(request.args.get("offset", "0"))
     try:
-        # Hacer un JOIN entre diagnostico_foto y diagnostico para obtener detalles completos
         q = supabase.table("diagnostico_foto") \
             .select("*, diagnostico(descripcion, causas, prevencion, tratamiento)") \
             .order("fecha", desc=True)
@@ -263,15 +212,11 @@ def list_diagnoses():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# Alternativa crear diágnostico
+# Crear diagnóstico alternativo con alertas
 @app.route("/diagnostic", methods=["POST"])
 def create_diagnostic():
-    """Crea un registro en diagnostico_foto. 
-       y en base a ello genera las alertas.
-       Puede recibir JSON o multipart/form-data."""
     id_usuario = request.form.get("idUsuario") or (request.json or {}).get("idUsuario")
-    diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico") #Nombre de la enfermedad
+    diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico")
     imagen_url = request.form.get("imagen_url") or (request.json or {}).get("imagen_url")
 
     if not id_usuario or not diagnostico:
@@ -289,24 +234,21 @@ def create_diagnostic():
 
     if not imagen_url:
         return jsonify({"error": "Se requiere imagen_url si no se proporciona un archivo"}), 400
+
     try:
         insert_resp = supabase.table("diagnostico_foto").insert({
             "imagen_url": imagen_url,
             "idUsuario": id_usuario,
             "diagnostico": diagnostico
         }).execute()
-        
         datos_diagnostico = getattr(insert_resp, "data", [{}])[0]
-
     except Exception as e:
         return jsonify({"error": f"Error al guardar el diagnóstico: {str(e)}"}), 500
-        
-    # Comienzo de alternativa
+
     try:
-        # Buscar alertas que coincidan con el diagnóstico
         alerta_resp = supabase.table("alertas").select("*").eq("enfermedad", diagnostico).execute()
         alertas_configuradas = alerta_resp.data or []
-        
+
         if not alertas_configuradas:
             return jsonify({
                 "message": "Diagnóstico creado. No se encontraron alertas para generar.",
@@ -316,7 +258,6 @@ def create_diagnostic():
         fecha_deteccion = datetime.now()
         alertas_generadas_count = 0
 
-        # Crear las alertas para el usuario
         for alerta in alertas_configuradas:
             dias_para_alerta = alerta.get("diasParaAlerta", 0)
             fecha_alerta = fecha_deteccion + timedelta(days=dias_para_alerta)
@@ -329,13 +270,13 @@ def create_diagnostic():
                 "completado": False
             }).execute()
             alertas_generadas_count += 1
-            
+
     except Exception as e:
         return jsonify({
             "message": "Diagnóstico creado, pero ocurrió un error al generar las alertas.",
             "error_alertas": str(e),
             "diagnosis_details": datos_diagnostico
-        }), 207  # 207 Multi-Status
+        }), 207
 
     return jsonify({
         "message": "Diagnóstico creado y alertas generadas exitosamente.",
@@ -343,6 +284,6 @@ def create_diagnostic():
         "alerts_generated": alertas_generadas_count
     }), 201
 
-        
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5050)
