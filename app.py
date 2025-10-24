@@ -18,52 +18,53 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
+from supabase import Client
+
 def login_user(supabase: Client, login_data: dict):
     """
-    Verifica las credenciales de un usuario contra la base de datos.
-    Espera un dict con 'email' y 'password'.
+    Verifica credenciales con texto plano.
     """
     try:
-        email = login_data.get('email')
-        password = login_data.get('password')
+        # Limpiamos los datos de entrada para evitar errores por espacios o mayúsculas
+        email = login_data.get('email', '').strip().lower()
+        password = login_data.get('password', '').strip()
 
         if not email or not password:
             return {"success": False, "message": "Correo y contraseña son requeridos"}, 400
 
-        response = supabase.table("usuarios").select("*").eq("correo", email.lower()).execute()
+        # Buscar al usuario por su correo
+        response = supabase.table("usuarios").select("*").eq("correo", email).execute()
 
         if not response.data:
             return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
         
         user = response.data[0]
-        
-        # (Recomiendo encarecidamente usar hashes para las contraseñas)
-        # if check_password_hash(user["contrasena"], password):
-        if user["contrasena"] == password:
+        password_from_db = user["contrasena"]
 
-            # --- LA SOLUCIÓN ESTÁ AQUÍ ---
-            # Convierte el objeto UUID a un string antes de enviarlo.
+        # --- COMPARACIÓN DIRECTA DE TEXTO PLANO ---
+        if password_from_db == password:
+            # La contraseña es correcta
+            user.pop("contrasena", None)
+
+            # Aseguramos que los UUID se envíen como string
             if 'idusuario' in user and user['idusuario'] is not None:
                 user['idusuario'] = str(user['idusuario'])
-
             if 'idparcela' in user and user['idparcela'] is not None:
                 user['idparcela'] = str(user['idparcela'])
-            # ---------------------------
 
-            user.pop("contrasena", None)  # No enviamos la contraseña de vuelta
             return {
                 "success": True,
                 "message": "Inicio de sesión exitoso",
                 "data": user
             }, 200
         else:
+            # La contraseña es incorrecta
             return {"success": False, "message": "Correo o contraseña incorrectos"}, 401
 
     except Exception as e:
-        # Imprimir el error en la consola del servidor te ayudará a depurar
-        print(f"Error en el servidor: {e}") 
+        print(f"Error del servidor: {str(e)}") # Útil para depurar en tu consola
         return {"success": False, "message": f"Error del servidor: {str(e)}"}, 500
-
+        
 # Reports
 @app.route("/reports", methods=["GET"])
 def get_reports():
