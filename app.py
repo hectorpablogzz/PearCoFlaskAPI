@@ -20,6 +20,7 @@ BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
 from supabase import Client
 
+@app.route("/login", methods=["GET"])
 def login_user(supabase: Client, login_data: dict):
     """
     Verifica credenciales con texto plano.
