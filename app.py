@@ -26,8 +26,8 @@ def login_user(supabase: Client, login_data: dict):
     """
     try:
         # Limpiamos los datos de entrada para evitar errores por espacios o mayúsculas
-        email = login_data.get('email', '').strip().lower()
-        password = login_data.get('password', '').strip()
+        email = login_data.get('correo').strip().lower()
+        password = login_data.get('contrasena').strip()
 
         if not email or not password:
             return {"success": False, "message": "Correo y contraseña son requeridos"}, 400
