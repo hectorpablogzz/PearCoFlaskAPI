@@ -1,22 +1,27 @@
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from uuid import uuid4
-from flask_cors import CORS
 import os
 
 import reports
+import alerts
+import caficultores
+import risk
+import auth
+import parcelas  
 
-@@ -16,263 +15,263 @@
+
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
 
 
 NEXT_PUBLIC_SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
+
 
 
 
