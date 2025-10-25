@@ -330,10 +330,12 @@ def create_diagnostic():
     try:
         insert_resp = supabase.table("diagnostico_foto").insert({
             "imagen_url": imagen_url,
-            "idUsuario": id_usuario,
+            "idusuario": id_usuario,      # <- antes: "idUsuario"
             "diagnostico": diagnostico
         }).execute()
+        
         datos_diagnostico = getattr(insert_resp, "data", [{}])[0]
+
     except Exception as e:
         return jsonify({"error": f"Error al guardar el diagnóstico: {str(e)}"}), 500
 
