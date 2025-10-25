@@ -257,7 +257,7 @@ def risk_series(region_id, year):
      try: return jsonify(risk.risk_series_json(supabase, region_id, year))
      except Exception as e: print(f"🚨 Error: {e}"); return jsonify({"error":"Error"}),500
 
-# --- Subir Imágenes y Diagnósticos (Revisado Casing y Errores) ---
+# --- Subir Imágenes y Diagnósticos  ---
 def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: str):
     """Sube bytes al bucket y devuelve URL pública. Lanza excepción en error."""
     if supabase is None: raise Exception("Supabase client not initialized")
@@ -275,15 +275,18 @@ def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: st
         print(f"Error Supabase Storage Upload: {e}")
         raise e # Re-lanza para que la ruta lo capture
 
+# ===== 1) POST /upload_image =====
 @app.route("/upload_image", methods=["POST"])
 def upload_image():
-    if supabase is None: return jsonify({"error": "Error interno (Supabase)"}), 500
-    if "file" not in request.files: return jsonify({"error": "file is required"}), 400
-    f = request.files["file"]
-    if f.filename == "": return jsonify({"error": "empty filename"}), 400
+    """Recibe una imagen (multipart/form-data) y la sube al Storage."""
+    if "file" not in request.files:
+        return jsonify({"error": "file is required"}), 400
 
-    # Usa 'idusuario' si esa es tu columna/convención
-    user_id = request.form.get("idusuario", "anonymous")
+    f = request.files["file"]
+    if f.filename == "":
+        return jsonify({"error": "empty filename"}), 400
+
+    user_id = request.form.get("user_id", "anonymous")
     ext = (f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "jpg")
     dest_path = f"{user_id}/{uuid4()}.{ext}"
     content_type = f.mimetype or "image/jpeg"
@@ -292,120 +295,85 @@ def upload_image():
         url = _upload_bytes_to_storage(f.read(), dest_path, content_type)
         return jsonify({"image_url": url, "path": dest_path}), 201
     except Exception as e:
-        print(f"🚨 Error en /upload_image: {e}")
-        return jsonify({"error": f"Fallo al subir imagen: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# CORREGIDO: Casing de idusuario y manejo de errores
+
+# ===== 2) POST /diagnostic =====
 @app.route("/diagnostic", methods=["POST"])
 def create_diagnostic():
-    if supabase is None: return jsonify({"error": "Error interno (Supabase)"}), 500
-    # Usa consistentemente 'idusuario' (o 'idUsuario' si así está en tu BD)
-    id_usuario_key = "idusuario"
-    id_usuario = request.form.get(id_usuario_key) or (request.json or {}).get(id_usuario_key)
+    """
+    Crea un registro en diagnostico_foto y genera las alertas.
+    Puede recibir JSON o multipart/form-data.
+    """
+    id_usuario = request.form.get("idUsuario") or (request.json or {}).get("idUsuario")
     diagnostico = request.form.get("diagnostico") or (request.json or {}).get("diagnostico")
     imagen_url = request.form.get("imagen_url") or (request.json or {}).get("imagen_url")
 
     if not id_usuario or not diagnostico:
-        return jsonify({"error": f"'{id_usuario_key}' y 'diagnostico' son requeridos"}), 400
+        return jsonify({"error": "idUsuario y diagnostico son requeridos"}), 400
 
-    # Subir imagen si viene archivo
     if 'file' in request.files and request.files['file'].filename:
         f = request.files['file']
         ext = (f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg')
         dest_path = f"{id_usuario}/{uuid4()}.{ext}"
         content_type = f.mimetype or "image/jpeg"
+
         try:
             imagen_url = _upload_bytes_to_storage(f.read(), dest_path, content_type)
         except Exception as e:
-             print(f"🚨 Error subiendo imagen en /diagnostic: {e}")
-             return jsonify({"error": f"Fallo al subir la imagen: {e}"}), 500
+            return jsonify({"error": f"Fallo al subir la imagen: {e}"}), 500
 
     if not imagen_url:
-        return jsonify({"error": "Se requiere 'imagen_url' si no se proporciona archivo"}), 400
+        return jsonify({"error": "Se requiere imagen_url si no se proporciona un archivo"}), 400
 
-    # Insertar diagnóstico
-    datos_diagnostico = None
+    # Guardar el diagnóstico
     try:
         insert_resp = supabase.table("diagnostico_foto").insert({
             "imagen_url": imagen_url,
-            id_usuario_key: id_usuario, # Usa la clave correcta
+            "idUsuario": id_usuario,
             "diagnostico": diagnostico
         }).execute()
-
-        if hasattr(insert_resp, 'error') and insert_resp.error:
-             print(f"Error Supabase insertando diagnóstico: {insert_resp.error}")
-             return jsonify({"error": f"Error al guardar el diagnóstico: {insert_resp.error.message}"}), 500
-        if not insert_resp.data:
-             print("Error insertando diagnóstico: No data returned.")
-             return jsonify({"error": "Error al guardar el diagnóstico (sin datos devueltos)"}), 500
-
-        datos_diagnostico = insert_resp.data[0] # Guardar para la respuesta final
-
+        datos_diagnostico = getattr(insert_resp, "data", [{}])[0]
     except Exception as e:
-        print(f"🚨 Error insertando diagnóstico en /diagnostic: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": f"Error interno al guardar el diagnóstico: {str(e)}"}), 500
+        return jsonify({"error": f"Error al guardar el diagnóstico: {str(e)}"}), 500
 
-    # Generar Alertas
-    alertas_generadas_count = 0
+    # Generar alertas asociadas
     try:
-        # Asegúrate que tabla 'alertas' y columna 'enfermedad' existen
-        alerta_resp = supabase.table("alertas").select("idalerta, diasParaAlerta").eq("enfermedad", diagnostico).execute()
+        alerta_resp = supabase.table("alertas").select("*").eq("enfermedad", diagnostico).execute()
+        alertas_configuradas = alerta_resp.data or []
 
-        if hasattr(alerta_resp, 'error') and alerta_resp.error:
-            # No es un error fatal, solo no se generan alertas
-            print(f"Error buscando alertas para '{diagnostico}': {alerta_resp.error}")
-        elif not alerta_resp.data:
-            print(f"No se encontraron alertas configuradas para '{diagnostico}'.")
-        else:
-            alertas_configuradas = alerta_resp.data
-            print(f"Encontradas {len(alertas_configuradas)} alertas para '{diagnostico}'. Generando...")
-            fecha_deteccion = datetime.now()
+        if not alertas_configuradas:
+            return jsonify({
+                "message": "Diagnóstico creado. No se encontraron alertas para generar.",
+                "diagnosis_details": datos_diagnostico
+            }), 201
 
-            for alerta in alertas_configuradas:
-                # Asegúrate que 'diasParaAlerta' existe y es numérico
-                dias_para_alerta = alerta.get("diasParaAlerta", 0)
-                try:
-                    dias_int = int(dias_para_alerta)
-                except (ValueError, TypeError):
-                    print(f"Warning: 'diasParaAlerta' inválido ({dias_para_alerta}) para alerta {alerta.get('idalerta')}. Usando 0.")
-                    dias_int = 0
+        fecha_deteccion = datetime.now()
+        alertas_generadas_count = 0
 
-                fecha_alerta = fecha_deteccion + timedelta(days=dias_int)
-                fecha_alerta_str = fecha_alerta.strftime("%Y-%m-%d")
+        for alerta in alertas_configuradas:
+            dias_para_alerta = alerta.get("diasParaAlerta", 0)
+            fecha_alerta = fecha_deteccion + timedelta(days=dias_para_alerta)
+            fecha_alerta_str = fecha_alerta.strftime("%Y-%m-%d")
 
-                # Asegúrate que tabla 'usuarioalerta' y columnas existen
-                insert_alerta_resp = supabase.table("usuarioalerta").insert({
-                    "idusuario": id_usuario, # Clave correcta
-                    "idalerta": alerta["idalerta"],
-                    "fecha": fecha_alerta_str,
-                    "completado": False
-                }).execute()
+            supabase.table("usuarioalerta").insert({
+                "idusuario": id_usuario,
+                "idalerta": alerta["idalerta"],
+                "fecha": fecha_alerta_str,
+                "completado": False
+            }).execute()
 
-                if hasattr(insert_alerta_resp, 'error') and insert_alerta_resp.error:
-                     print(f"Error insertando usuarioalerta para idalerta {alerta['idalerta']}: {insert_alerta_resp.error}")
-                     # Decide si continuar con otras alertas o parar
-                else:
-                    alertas_generadas_count += 1
+            alertas_generadas_count += 1
 
     except Exception as e:
-        print(f"🚨 Error generando alertas en /diagnostic: {e}")
-        print(traceback.format_exc())
-        # Devuelve éxito parcial si el diagnóstico se guardó pero las alertas fallaron
         return jsonify({
             "message": "Diagnóstico creado, pero ocurrió un error al generar las alertas.",
             "error_alertas": str(e),
-            "diagnosis_details": datos_diagnostico # Devuelve los detalles guardados
-        }), 207 # Multi-Status
-
-    # Respuesta final
-    if alertas_generadas_count > 0:
-        message = f"Diagnóstico creado y {alertas_generadas_count} alertas generadas exitosamente."
-    else:
-         message = "Diagnóstico creado. No se encontraron o generaron alertas."
+            "diagnosis_details": datos_diagnostico
+        }), 207  # 207 Multi-Status
 
     return jsonify({
-        "message": message,
+        "message": "Diagnóstico creado y alertas generadas exitosamente.",
         "diagnosis_details": datos_diagnostico,
         "alerts_generated": alertas_generadas_count
     }), 201
