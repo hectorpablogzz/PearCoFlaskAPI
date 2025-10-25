@@ -1,3 +1,4 @@
+from flask import Flask, jsonify, request
 from supabase import Client
 
 def login_user(supabase: Client, login_data: dict):
