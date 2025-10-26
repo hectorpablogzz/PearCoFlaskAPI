@@ -346,7 +346,7 @@ def create_diagnostic():
 
         if not alertas_configuradas:
             return jsonify({
-                "message": "Diagnóstico creado. No se encontraron alertas para generar.",
+                "message": "Diagnóstico creado",
                 "diagnosis_details": datos_diagnostico
             }), 201
 
@@ -369,13 +369,13 @@ def create_diagnostic():
 
     except Exception as e:
         return jsonify({
-            "message": "Diagnóstico creado, pero ocurrió un error al generar las alertas.",
+            "message": "Diagnóstico creado, sin alertas nuevas para generar.",
             "error_alertas": str(e),
             "diagnosis_details": datos_diagnostico
         }), 207  # 207 Multi-Status
 
     return jsonify({
-        "message": "Diagnóstico creado y alertas generadas exitosamente.",
+        "message": "Diagnóstico creado. Se han generado nuevas alertas.",
         "diagnosis_details": datos_diagnostico,
         "alerts_generated": alertas_generadas_count
     }), 201
