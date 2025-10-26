@@ -4,9 +4,7 @@ from dotenv import load_dotenv
 from uuid import uuid4
 import os
 from datetime import datetime, timedelta
-import traceback # Para logs de error más detallados
-
-# Asegúrate que estos archivos existan y no tengan errores de sintaxis
+import traceback 
 import reports
 import alerts
 import caficultores
@@ -23,19 +21,18 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
 # Validación simple de variables de entorno al inicio
 if not NEXT_PUBLIC_SUPABASE_URL or not NEXT_PUBLIC_SUPABASE_ANON_KEY:
-    print("🚨 ERROR: Las variables de entorno de Supabase (URL/KEY) no están configuradas.")
-    # Considera salir o manejar este error de forma más robusta si es crítico
-    supabase = None # O asigna un cliente dummy/inválido
+    print(" ERROR: Las variables de entorno de Supabase (URL/KEY) no están configuradas.")
+    supabase = None 
 else:
     try:
         supabase: Client = create_client(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
     except Exception as e:
-        print(f"🚨 ERROR al inicializar el cliente de Supabase: {e}")
-        supabase = None # O maneja el error
+        print(f" ERROR al inicializar el cliente de Supabase: {e}")
+        supabase = None
 
 BUCKET_NAME = os.getenv("SUPABASE_BUCKET", "CoffeeDiagnosisPhotos")
 
-# --- Ruta Base (Opcional, para verificar si la API está viva) ---
+# --- Ruta Base ---
 @app.route("/", methods=["GET"])
 def index():
     # Verifica si el cliente de Supabase se inicializó correctamente
@@ -48,23 +45,22 @@ def index():
 def login():
     if supabase is None: return jsonify({"success": False, "message": "Error interno del servidor (Supabase)"}), 500
     # Llama a la función de auth.py
-    # Asegúrate que auth.py devuelva TUPLA (response_dict, status_code)
     try:
         response, status_code = auth.login_user(supabase, request.json)
         return jsonify(response), status_code
     except Exception as e:
-        print(f"🚨 Error en la ruta /login llamando a auth.login_user: {e}")
+        print(f" Error en la ruta /login llamando a auth.login_user: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": "Error interno del servidor durante el login."}), 500
 
 
-# --- Reports (Sin cambios, asumiendo que reports.py existe y funciona) ---
+# --- Reports ---
 @app.route("/reports", methods=["GET"])
 def get_reports():
     try:
         return jsonify(reports.reports_json())
     except Exception as e:
-        print(f"🚨 Error en /reports: {e}")
+        print(f" Error en /reports: {e}")
         return jsonify({"error": "Error al obtener reportes"}), 500
 
 @app.route("/summary", methods=["GET"])
@@ -72,10 +68,10 @@ def get_summary():
     try:
         return jsonify(reports.summary_json())
     except Exception as e:
-        print(f"🚨 Error en /summary: {e}")
+        print(f" Error en /summary: {e}")
         return jsonify({"error": "Error al obtener resumen"}), 500
 
-# --- Alertas (Sin cambios funcionales, añadido chequeo de Supabase) ---
+# --- Alertas ---
 @app.route("/alerts", methods=["GET"])
 def get_alerts():
     if supabase is None: return jsonify({"error": "Error interno del servidor (Supabase)"}), 500
@@ -83,7 +79,6 @@ def get_alerts():
     if not user_id: return jsonify({"error": "Parámetro 'idusuario' requerido"}), 400
 
     try:
-        # Asegúrate que la función RPC 'get_alerts' existe en tu Supabase
         response = supabase.rpc("get_alerts", {"userid": user_id}).execute()
         out = []
         if response.data:
@@ -100,7 +95,7 @@ def get_alerts():
                 })
         return jsonify(out)
     except Exception as e:
-        print(f"🚨 Error en GET /alerts: {e}")
+        print(f" Error en GET /alerts: {e}")
         print(traceback.format_exc())
         return jsonify({"error": "Error al obtener alertas"}), 500
 
@@ -115,14 +110,11 @@ def complete_alert():
         return jsonify({"success": False, "message": "'idalerta' y 'isCompleted' son requeridos"}), 400
 
     try:
-        # Asegúrate que la tabla 'usuarioalerta' y columna 'idalerta' existen
         response = supabase.table("usuarioalerta").update({"completado": is_completed}).eq("idalerta", id_alert).execute()
         # Supabase devuelve datos en 'data' incluso si no se actualizó nada (si el filtro coincidió)
-        # Una mejor verificación podría ser si response.error existe
         if hasattr(response, 'error') and response.error:
              print(f"Error Supabase en POST /alerts/complete: {response.error}")
              return jsonify({"success": False, "message": f"Error al actualizar alerta: {response.error.message}"}), 500
-        # Opcional: verificar si realmente se actualizó algo (más complejo, requiere select previo)
         return jsonify({"success": True, "message": "Alerta actualizada (o ya estaba en ese estado)"}), 200
 
     except Exception as e:
@@ -139,7 +131,7 @@ def delete_alert(idalerta):
         if hasattr(response, 'error') and response.error:
              print(f"Error Supabase en DELETE /alerts/{idalerta}: {response.error}")
              return jsonify({"success": False, "message": f"Error al eliminar alerta: {response.error.message}"}), 500
-        # Verificar si algo fue eliminado (response.data usualmente contiene los datos eliminados)
+        # Verificar si algo fue eliminado
         if response.data:
             return jsonify({"success": True, "message": "Alerta eliminada"}), 200
         else:
@@ -150,7 +142,7 @@ def delete_alert(idalerta):
         return jsonify({"success": False, "message": "Error interno al eliminar alerta"}), 500
 
 
-# --- Caficultores (Sin cambios, asumiendo que caficultores.py existe y funciona) ---
+# --- Caficultores ---
 @app.route("/caficultores", methods=["GET"])
 def caficultores_get():
     if supabase is None: return jsonify({"error":"Error interno"}), 500
@@ -179,12 +171,11 @@ def caficultores_delete(id):
     try: return caficultores.delete_caficultor(supabase, id)
     except Exception as e: print(f"🚨 Error: {e}"); return jsonify({"error":"Error"}),500
 
-# --- Parcelas CRUD (CORREGIDO para usar Strings en rutas) ---
+# --- Parcelas ---
 @app.route("/parcelas", methods=["GET"])
 def get_parcelas():
     if supabase is None: return jsonify({"success": False, "error": "Error interno (Supabase)"}), 500
     # Llama a la función de parcelas.py
-    # Asegúrate que parcelas.py devuelva TUPLA (response_dict, status_code)
     try:
         response, status_code = parcelas.obtener_parcelas(supabase)
         return jsonify(response), status_code
@@ -193,7 +184,6 @@ def get_parcelas():
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error interno al obtener parcelas."}), 500
 
-# CORREGIDO: quitado <int:>
 @app.route("/parcelas/<idParcela>", methods=["GET"])
 def get_parcela(idParcela):
     if supabase is None: return jsonify({"success": False, "error": "Error interno (Supabase)"}), 500
@@ -218,7 +208,6 @@ def post_parcela():
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error interno al crear parcela."}), 500
 
-# CORREGIDO: quitado <int:>
 @app.route("/parcelas/<idParcela>", methods=["PUT"])
 def put_parcela(idParcela):
     if supabase is None: return jsonify({"success": False, "error": "Error interno (Supabase)"}), 500
@@ -232,7 +221,6 @@ def put_parcela(idParcela):
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error interno al modificar parcela."}), 500
 
-# CORREGIDO: quitado <int:>
 @app.route("/parcelas/<idParcela>", methods=["DELETE"])
 def delete_parcela(idParcela):
     if supabase is None: return jsonify({"success": False, "error": "Error interno (Supabase)"}), 500
@@ -244,7 +232,7 @@ def delete_parcela(idParcela):
         print(traceback.format_exc())
         return jsonify({"success": False, "error": "Error interno al eliminar parcela."}), 500
 
-# --- Riesgo (Sin cambios, asumiendo que risk.py existe y funciona) ---
+# --- Riesgo ---
 @app.route("/risk/<region_id>/<int:year>/<int:month>", methods=["GET"])
 def risk_one(region_id, year, month):
      if supabase is None: return jsonify({"error":"Error interno"}), 500
@@ -267,7 +255,7 @@ def _upload_bytes_to_storage(file_bytes: bytes, dest_path: str, content_type: st
             file_options={"contentType": content_type, "cacheControl": "3600", "upsert": False}
         )
         public_url_data = supabase.storage.from_(BUCKET_NAME).get_public_url(dest_path)
-        # Maneja respuesta de get_public_url (puede ser string o dict en algunas versiones)
+        # Maneja respuesta de get_public_url
         if isinstance(public_url_data, dict):
             return public_url_data.get('publicUrl', str(public_url_data))
         return public_url_data
@@ -330,7 +318,7 @@ def create_diagnostic():
     try:
         insert_resp = supabase.table("diagnostico_foto").insert({
             "imagen_url": imagen_url,
-            "idusuario": id_usuario,      # <- antes: "idUsuario"
+            "idusuario": id_usuario,   
             "diagnostico": diagnostico
         }).execute()
         
@@ -380,7 +368,6 @@ def create_diagnostic():
         "alerts_generated": alertas_generadas_count
     }), 201
 
-# CORREGIDO: Casing idusuario y Select
 @app.route("/diagnoses", methods=["GET"])
 def list_diagnoses():
     if supabase is None: return jsonify({"error": "Error interno (Supabase)"}), 500
@@ -390,9 +377,6 @@ def list_diagnoses():
     limit = int(request.args.get("limit", "50"))
     offset = int(request.args.get("offset", "0"))
     try:
-        # Asegúrate que la relación FK esté bien definida en Supabase
-        # diagnostico_foto.diagnostico -> diagnostico.enfermedad
-        # Y que las columnas en diagnostico existan
         select_query = (
             "iddiagnostico, imagen_url, fecha, idusuario, diagnostico, " # Columnas de diagnostico_foto
             "diagnostico!inner(descripcion, causas, prevencion, tratamiento)" # JOIN a tabla diagnostico
@@ -416,9 +400,7 @@ def list_diagnoses():
         print(traceback.format_exc())
         return jsonify({"error": f"Error interno al listar diagnósticos: {str(e)}"}), 500
 
-# --- Inicio de la Aplicación (Importante para Render) ---
+# --- Inicio de la Aplicación  ---
 if __name__ == "__main__":
-    # Esto es principalmente para desarrollo local
     print("Iniciando servidor Flask para desarrollo local...")
-    # Render usará el 'Start Command' (ej: gunicorn), no este bloque
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5050)), debug=True) # debug=True ayuda en local
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5050)), debug=True)
